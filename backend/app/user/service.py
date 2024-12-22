@@ -14,7 +14,8 @@ def get_user_by_email(session: Session, email: EmailStr):
     Returns:
         User/None: User with the email, else None
     """
-    return session.exec(select(User).where(User.email == email)).first()
+    query = select(User).where(User.email == email)
+    return session.exec(query).first()
 
 
 def get_user_by_id(session: Session, id: str):
@@ -27,4 +28,5 @@ def get_user_by_id(session: Session, id: str):
     Returns:
         User/None: User with the id, else None
     """
-    return session.exec(select(User).where(User.id == id)).first()
+    query = select(User).where(User.id == id)
+    return session.exec(query).first()

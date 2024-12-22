@@ -12,6 +12,9 @@ class User(UserBase, table=True):
     disabled: bool | None
     name: str | None
     password: str
+    
+class UserGetResponse(UserBase):
+    pass
 
 
 class UserRegister(UserBase):

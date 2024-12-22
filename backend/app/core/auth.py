@@ -9,80 +9,15 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from app.core.config import settings
 from app.core.db import db_session_dependency
 from app.core.utils import create_access_token, generate_password_hash, verify_password
-from app.models import LoginResponse, RegisterResponse, TokenData, UserRegister, User
+from app.models import LoginResponse, RegisterResponse, TokenData, UserGetResponse, UserRegister, User
 from app.user.service import get_user_by_email, get_user_by_id
 
 
 auth_router = APIRouter(prefix="/auth")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 auth_dependency = Annotated[str, Depends(oauth2_scheme)]
-
-
-@auth_router.post("/login", response_model=LoginResponse)
-async def login_user(
-    login_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    session: db_session_dependency,
-    response: Response
-):
-    """User Login Route Handler
-
-    Args:
-        login_data (Annotated[OAuth2PasswordRequestForm, Depends): Depends on OAuth2PasswordRequestForm to get username and password from client
-        session (db_session_dependency): DB Session
-
-    Raises:
-        HTTPException: 401 - Incorrect username or password
-
-    Returns:
-        LoginResponse: Respose containing access token
-    """
-    db_user = authenticate_user(session, login_data.username, login_data.password)
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": str(db_user.id)}, expires_delta=access_token_expires
-    )
-
-    response.set_cookie(key="access_token", value=access_token)
-    return LoginResponse(access_token=access_token, token_type="bearer")
-
-
-@auth_router.post("/register", response_model=RegisterResponse)
-async def register_user(user_data: UserRegister, session: db_session_dependency):
-    """User Register Route Handler
-
-    Args:
-        user_data (UserRegister): User data input
-        session (db_session_dependency): DB Session
-
-    Raises:
-        HTTPException: 409 - Email Already Exists
-
-    Returns:
-        RegisterResponse: Response with user id
-    """
-    db_user = get_user_by_email(session, user_data.email)
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already taken!"
-        )
-
-    hashed_password = generate_password_hash(user_data.password)
-    db_user = User(email=user_data.email, password=hashed_password)
-
-    session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
-
-    return RegisterResponse(message="User registered successfully", user_id=db_user.id)
 
 
 def authenticate_user(session: db_session_dependency, email: str, password: str):
@@ -130,7 +65,7 @@ def verify_access_token(token: str, credentials_exception: HTTPException):
     return token_data
 
 
-async def get_current_user(token: auth_dependency):
+async def get_current_user(session: db_session_dependency, token: auth_dependency):
     """Get current user
 
     Args:
@@ -148,9 +83,9 @@ async def get_current_user(token: auth_dependency):
         headers={"WWW-Authenticate": "Bearer"},
     )
     token_data = verify_access_token(
-        token=token, credential_exception=credentials_exception
+        token=token, credentials_exception=credentials_exception
     )
-    db_user = get_user_by_id(session=db_session_dependency, id=token_data.user_id)
+    db_user = get_user_by_id(session=session, id=token_data.user_id)
     if not db_user:
         raise credentials_exception
     return db_user
@@ -174,4 +109,73 @@ async def get_current_active_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
         )
+    return current_user
+
+@auth_router.post("/login", response_model=LoginResponse)
+async def login_user(
+    login_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    session: db_session_dependency,
+    response: Response
+):
+    """User Login Route Handler
+
+    Args:
+        login_data (Annotated[OAuth2PasswordRequestForm, Depends): Depends on OAuth2PasswordRequestForm to get username and password from client
+        session (db_session_dependency): DB Session
+
+    Raises:
+        HTTPException: 401 - Incorrect username or password
+
+    Returns:
+        LoginResponse: Respose containing access token
+    """
+    db_user = authenticate_user(session, login_data.username, login_data.password)
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": str(db_user.id)}, expires_delta=access_token_expires
+    )
+
+    response.set_cookie(key="access_token", value=access_token, httponly=True)
+    return LoginResponse(access_token=access_token, token_type="bearer")
+
+
+@auth_router.post("/register", response_model=RegisterResponse)
+async def register_user(user_data: UserRegister, session: db_session_dependency):
+    """User Register Route Handler
+
+    Args:
+        user_data (UserRegister): User data input
+        session (db_session_dependency): DB Session
+
+    Raises:
+        HTTPException: 409 - Email Already Exists
+
+    Returns:
+        RegisterResponse: Response with user id
+    """
+    db_user = get_user_by_email(session, user_data.email)
+    if db_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already taken!"
+        )
+
+    hashed_password = generate_password_hash(user_data.password)
+    db_user = User(email=user_data.email, password=hashed_password)
+
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
+
+    return RegisterResponse(message="User registered successfully", user_id=db_user.id)
+
+
+@auth_router.get("/users/me/", response_model=UserGetResponse)
+async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
