@@ -2,7 +2,7 @@ import jwt
 
 from datetime import timedelta
 from typing import Annotated
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
@@ -24,6 +24,7 @@ auth_dependency = Annotated[str, Depends(oauth2_scheme)]
 async def login_user(
     login_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: db_session_dependency,
+    response: Response
 ):
     """User Login Route Handler
 
@@ -50,6 +51,7 @@ async def login_user(
         data={"sub": str(db_user.id)}, expires_delta=access_token_expires
     )
 
+    response.set_cookie(key="access_token", value=access_token)
     return LoginResponse(access_token=access_token, token_type="bearer")
 
 
