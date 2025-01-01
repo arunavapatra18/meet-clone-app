@@ -9,7 +9,8 @@
       const requestOpts = {
         method: "POST",
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({username, password})
+        body: new URLSearchParams({username, password}),
+        credentials: 'include' as RequestCredentials,
       }
       try {
         const response = await fetch(endpoint, requestOpts)

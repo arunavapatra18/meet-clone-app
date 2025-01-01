@@ -1,8 +1,9 @@
+from fastapi.responses import RedirectResponse
 import jwt
 
 from datetime import timedelta
 from typing import Annotated
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
@@ -19,6 +20,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 auth_dependency = Annotated[str, Depends(oauth2_scheme)]
 
+credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 def authenticate_user(session: db_session_dependency, email: str, password: str):
     """Authenticate user
@@ -77,11 +83,6 @@ async def get_current_user(session: db_session_dependency, token: auth_dependenc
     Returns:
         User: Current user
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     token_data = verify_access_token(
         token=token, credentials_exception=credentials_exception
     )
@@ -142,7 +143,7 @@ async def login_user(
         data={"sub": str(db_user.id)}, expires_delta=access_token_expires
     )
 
-    response.set_cookie(key="access_token", value=access_token, httponly=True)
+    response.set_cookie(key="access_token", value=access_token, httponly=True, max_age=access_token_expires)
     return LoginResponse(access_token=access_token, token_type="bearer")
 
 
@@ -179,3 +180,25 @@ async def register_user(user_data: UserRegister, session: db_session_dependency)
 @auth_router.get("/users/me/", response_model=UserGetResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@auth_router.get("/status/")
+async def auth_status(request: Request):
+    print(request.headers)
+    token = request.cookies.get("access_token")
+    print(f"Recv token:{token}")
+    if not token:
+        return {"is_authenticated": False}
+    try:
+        token_data = verify_access_token(token, credentials_exception=credentials_exception)
+        if token_data:
+            return {"is_authenticated": True}
+    except HTTPException:
+        return {"is_authenticated": False}
+        
+
+@auth_router.post("/logout/")
+async def logout(request: Request):
+    response = RedirectResponse(url="http://127.0.0.1:5173/login", status_code=302)
+    response.delete_cookie(key="access_token")
+    return response
