@@ -5,6 +5,7 @@ from app.core.auth import auth_router
 from app.core.db import init_db
 from app.models import User
 from app.user.router import user_router
+from app.webrtc.signaling_server import SignalingServer
 
 app = FastAPI()
 
@@ -19,6 +20,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(user_router)
 
+signaling_server = SignalingServer(app)
 
 @app.on_event("startup")
 def on_startup():

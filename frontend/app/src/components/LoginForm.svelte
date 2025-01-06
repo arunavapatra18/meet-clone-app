@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
+	import { redirect } from "@sveltejs/kit";
 
     let username = ''
     let password = ''
@@ -16,11 +16,11 @@
         const response = await fetch(endpoint, requestOpts)
       
         if (response.ok) {
-          response.json().then(data => console.log(data))
+          window.location.href = "/home"
         }
         else {
           const errorData = await response.json()
-          console.error('Registration failed: ', errorData)
+          console.error('Login failed: ', errorData)
         }
       } catch (error) {
         console.error('An error occured: ', error)
